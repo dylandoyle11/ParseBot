@@ -13,8 +13,6 @@ from email.mime.multipart import MIMEMultipart
 
 class EmailBot:
     
-    mail = ''
-    
     def __init__(self):
         
         self.search = 'SUBJECT','test1'
