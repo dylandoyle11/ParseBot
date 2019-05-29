@@ -10,6 +10,8 @@ import sys
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+global directories
+directories = []
 
 class EmailBot:
     
@@ -23,8 +25,6 @@ class EmailBot:
         self.host = 'imap.gmail.com'
         self.directory = '/home/pi/Desktop/Python/Bot/Temp'
         self.__email_connect()
-        self.file = ''
-        
         
     def __email_connect(self):
     
@@ -50,12 +50,8 @@ class EmailBot:
                 if part.get_content_maintype() != 'multipart' and part.get('Content-Disposition') is not None:
                     print('Saved!')
                     open(self.directory + '/' + part.get_filename(), 'wb').write(part.get_payload(decode=True))
-                    self.filedir = (self.directory + '/' + part.get_filename())
+                    directories.append('(self.directory + '/' + part.get_filename())')
                     
-    def file_dir(self):
-        
-        return self.filedir
-    
     def disconnect(self):
         os.remove(self.filedir)
         print('File deleted, disconnected.')
