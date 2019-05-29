@@ -12,8 +12,9 @@ from email.mime.multipart import MIMEMultipart
 
 global directories
 directories = []
+senders = []
 
-class EmailBot:
+class ParseBot:
     
     def __init__(self):
         
@@ -30,16 +31,14 @@ class EmailBot:
     
         self.mail = imapclient.IMAPClient(self.host, ssl = True)
         accountdetails = self.mail.login(self.email, self.pw)
-        print(accountdetails)
         selected_info = self.mail.select_folder(self.folder, readonly = self.readonly)
         
     def email_search(self):
         
-        self.id = self.mail.search([self.search])
-        
-        for uid, message_data in self.mail.fetch(self.id, 'RFC822').items():
+        id = self.mail.search([self.search])
+      
+        for uid, message_data in self.mail.fetch(id, 'RFC822').items():
             email_message = email.message_from_bytes(message_data[b'RFC822'])
-            print(uid, email_message.get('From'), email_message.get('Subject'))
             
             if email_message.get_content_maintype() != 'multipart':
                 print('No attachment found')
@@ -51,11 +50,12 @@ class EmailBot:
                     print('Saved!')
                     open(self.directory + '/' + part.get_filename(), 'wb').write(part.get_payload(decode=True))
                     directories.append('(self.directory + '/' + part.get_filename())')
+                    senders.append(email_message.get('From'))
                     
-    def disconnect(self):
-        os.remove(self.filedir)
+    def disconnect(self, directory):
+        os.remove(directory)
         print('File deleted, disconnected.')
-        pass #disconnect
+        #disconnect
 
 class Gsheets:
     
@@ -80,11 +80,12 @@ class Main:
     
     def __init__(self):
         
-    def open_sheet(self, directory):
+    
+    def open_sheet(self):
+        for attachment in directories:
+            os.open(attachment)
         
-        
-        
-    def SendEmail(self):
+    def send_email(self):
             
         password = 'Dylandylan2'
         sent_from = 'kellyservices.bot@gmail.com'
@@ -103,7 +104,7 @@ class Main:
             server.sendmail(sent_from, to, msg.as_string())
 
 print('Beginning')
-bot = EmailBot()
+bot = ParseBot()
 bot.email_scrape()
 bot.disconnect()
 exit()
