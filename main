@@ -6,19 +6,23 @@ import imapclient
 import os
 import email
 import sys
+import re
+import time
 
+from docx import Document
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-global directories
 directories = []
 senders = []
+candidate_list = []
+global scrape
 
 class ParseBot:
     
     def __init__(self):
         
-        self.search = 'SUBJECT','test1'
+        self.search = ['SUBJECT','tits']
         self.email = 'kellyservices.bot@gmail.com'
         self.pw = 'Dylandylan2'
         self.folder = 'INBOX'
@@ -26,6 +30,7 @@ class ParseBot:
         self.host = 'imap.gmail.com'
         self.directory = '/home/pi/Desktop/Python/Bot/Temp'
         self.__email_connect()
+        self.download = False
         
     def __email_connect(self):
     
@@ -34,62 +39,81 @@ class ParseBot:
         selected_info = self.mail.select_folder(self.folder, readonly = self.readonly)
         
     def email_search(self):
-        
+        global scrape
+        scrape = False
         id = self.mail.search([self.search])
-      
-        for uid, message_data in self.mail.fetch(id, 'RFC822').items():
-            email_message = email.message_from_bytes(message_data[b'RFC822'])
+        print(id)
+        if len(id) > 0:
+            scrape = True
             
-            if email_message.get_content_maintype() != 'multipart':
-                print('No attachment found')
-                return
-        
-            for part in email_message.walk():
+            for uid, message_data in self.mail.fetch(id, 'RFC822').items():
+                email_message = email.message_from_bytes(message_data[b'RFC822'])
+                
+                if email_message.get_content_maintype() != 'multipart':
+                    print('No attachment found')
+                    return
+            
+                for part in email_message.walk():
 
-                if part.get_content_maintype() != 'multipart' and part.get('Content-Disposition') is not None:
-                    print('Saved!')
-                    open(self.directory + '/' + part.get_filename(), 'wb').write(part.get_payload(decode=True))
-                    directories.append('(self.directory + '/' + part.get_filename())')
-                    senders.append(email_message.get('From'))
-                    
-    def disconnect(self, directory):
-        os.remove(directory)
-        print('File deleted, disconnected.')
-        #disconnect
-
-class Gsheets:
-    
-    def __init__(self):
-        pass
-    
-    def sheet_connect(self):
+                    if part.get_content_maintype() != 'multipart' and part.get('Content-Disposition') is not None:
+                        print('Saved!')
+                        open(self.directory + '/' + part.get_filename(), 'wb').write(part.get_payload(decode=True))
+                        directories.append((self.directory + '/' + part.get_filename()))
+                        senders.append(email_message.get('From'))
+         
+        else:
+            print('No new emails.')
+            
+        print(directories)
         
-        from oauth2client.service_account import ServiceAccountCredentials
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_name('/home/pi/Desktop/Python/Bot/bot_cred.json', scope)
-        client = gspread.authorize(creds)
-        global sheet
-        sheet = client.open("Candidate Tracker").sheet1
+def sheet_connect():
+    
+    from oauth2client.service_account import ServiceAccountCredentials
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds = ServiceAccountCredentials.from_json_keyfile_name('/home/pi/Desktop/Python/Bot/bot_cred.json', scope)
+    client = gspread.authorize(creds)
+    doc = client.open('Copy of Candidate Tracker')
+    global sheet_list
+    sheet_list = doc.worksheets() 
 
 class Main:
     
     employee_dict = {
+        
     'April': 'AA',
-    'Gaby': 'GO'
+    'April Anolin': 'AA',
+    'Gaby': 'GO',
+    'Gabriela Ong': 'GO',
+    'Gaby Ong': 'GO'
+    
     }
     
-    def __init__(self):
+    sheet_redirect = {
         
-    
-    def open_sheet(self):
-        for attachment in directories:
-            os.open(attachment)
+        'oo': 'OO/SO/Accounting',
+        'so': 'OO/SO/Accounting',
+        'credit': 'OO/SO/Accounting',
+        'analyst': 'OO/SO/Accounting',
+        'reconciliation': 'OO/SO/Accounting',
+        'oo':'OO/SO/Accounting',
+        'data entry': 'Data Entry',
+        'hr': 'HR',
+        'recruiting': 'HR',
+        'marketing' : 'HR',
+        'it': 'IT',
+        'access service rep': 'IT',
+        'admin ea': 'Admin EA',
+        'law clerk': 'Admin EA',
+        'csr': 'CSR',
+        'case manager': 'Case Coordinator',
+        'case coordinator': 'Case Coordinator',
+    }
         
-    def send_email(self):
+    def send_email(self, sender):
             
         password = 'Dylandylan2'
         sent_from = 'kellyservices.bot@gmail.com'
-        to = [sender]  
+        to = sender  
         subject = ('Request received. Tracker updated.') 
         body = ''
         msg = MIMEMultipart()
@@ -102,12 +126,100 @@ class Main:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
             server.login(sent_from, password)
             server.sendmail(sent_from, to, msg.as_string())
+            
+    def sheet_sorter(suitable_pos):
+        suitable_sheet = []
+        for sheet in sheet_list: 
+            if suitable_pos in sheet.title:
+                suitable_sheet.append(sheet.title)
+    
+    def run(self):
+        
+        if scrape is True:
+            print('Beginning scrape...')
+            sheet_connect()
+            for attachment in directories:
+               
+               #Sort initial table of info
+                doc = Document(attachment)
+                table1 = doc.tables[0]
+                candidate = []
+                for i in range(6):
+                    entry = table1.cell(i,1).text.strip()
+                    candidate.append(entry)
+                
+                
+                int_comments = table1.cell(7,1).text.strip().split('\n')
+                int_comments = [entry.strip() for entry in int_comments]
+                print(int_comments)
+                print('-'*20)
+                
+                matches = []
+                for entry in int_comments:
+                    
+                    suit_pos = re.search('(^SUITABLE POSITIONS: )(.*)', entry)
+                    locat = re.search('(^LOCATION: )(.*)', entry)
+                    avail = re.search('(^AVAILABILITY: )(.*)', entry)
+                    comm = re.search('(^COMMUNICATION: )(\d)(.\d)', entry)
+                    
+                    if suit_pos:
+                        suitable_p = suit_pos.group(2)
+                        matches.append(suit_pos.group())
+                        candidate.append(suit_pos.group(2))
+                        
+                    elif locat:
+                        matches.append(locat.group())
+                        candidate.append(locat.group(2))
+                        
+                    elif avail:
+                        matches.append(avail.group())
+                        candidate.append(avail.group(2))
+        
+                    elif comm:
+                        matches.append(comm.group())
+                        candidate.append(comm.group(2))
+                        
+                for match in matches:
+                    int_comments.remove(match)
 
-print('Beginning')
+            #rework note formatting
+                int_comments.pop(0)
+                int_comments = [entry+',' for entry in int_comments]
+                int_comments = ' '.join(int_comments)
+                
+                candidate.append('CREDIT')
+                candidate.append(int_comments.strip())
+                                    
+                #reorder entries for quick insertion
+                order = [4, 0, 1 , 2, 3, 7, 10, 6, 5, 8, 9, 11]
+                candidate = [candidate[i] for i in order]
+                candidate[0] = self.employee_dict[candidate[0]]
+                candidate.insert(0, time.strftime("%m/%d/%Y"))
+                print(candidate)
+                
+                for sheet in sheet_list:
+                    if self.sheet_redirect.get(suitable_p.lower()) == sheet.title:
+                        main_sheet = sheet
+            
+                print('Writing to ' + main_sheet.title)
+                sheet_length = [entry for entry in main_sheet.col_values(1)]
+                main_sheet.insert_row(candidate, len(sheet_length)+1)
+                
+            self.exit()
+        
+    def exit(self):
+        for dir in directories:
+            os.remove(dir)
+            print('Files removed')
+
+print('Executing program...')
 bot = ParseBot()
-bot.email_scrape()
-bot.disconnect()
+bot.email_search()
+run = Main()
+run.run()
 exit()
+
+
 
 
 
