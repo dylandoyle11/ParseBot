@@ -24,7 +24,7 @@ class ParseBot:
         
         self.search = ['SUBJECT','tits']
         self.email = 'kellyservices.bot@gmail.com'
-        self.pw = 'Dylandylan2'
+        self.pw = '
         self.folder = 'INBOX'
         self.readonly = False
         self.host = 'imap.gmail.com'
