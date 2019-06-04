@@ -16,88 +16,198 @@ from email.mime.multipart import MIMEMultipart
 directories = []
 senders = []
 candidate_list = []
-global scrape
+doc_name = 'Copy of Candidate Tracker'
+error = ''
 
 class ParseBot:
+    """
+    Class that scans email inbox for unread email with subject 'input'. Bot will download
+    the attachment(s) and pass them to the main function to be analyzed
+    
+    Attributes
+    
+    error: global error value to pass to error message
+    self.search: email search parameters
+    self.email: bot email address
+    self.pw: password for bot login
+    self.folder: email folder to search
+    self.readonly: give bot the ability to read and write
+    self.host: IMAP host address
+    self.directory: local directory to download email attachments
+    self.__email_connect(): connect to email account upon initialization
+    
+    Methods:
+    
+    __email_connect(): connect to email server
+    email_search(): Function that performs email search and downloads attachment(s) if found
+    """
     
     def __init__(self):
         
-        self.search = ['SUBJECT','tits']
-        self.email = 'kellyservices.bot@gmail.com'
-        self.pw = '
+        self.search = ['SUBJECT','testing']
+        self.email = ''
+        self.pw = ''
         self.folder = 'INBOX'
         self.readonly = False
         self.host = 'imap.gmail.com'
-        self.directory = '/home/pi/Desktop/Python/Bot/Temp'
+        self.directory = ''
         self.__email_connect()
-        self.download = False
-        
+                
     def __email_connect(self):
-    
-        self.mail = imapclient.IMAPClient(self.host, ssl = True)
-        accountdetails = self.mail.login(self.email, self.pw)
-        selected_info = self.mail.select_folder(self.folder, readonly = self.readonly)
+        
+        global error
+        try:
+            self.mail = imapclient.IMAPClient(self.host, ssl = True)
+            accountdetails = self.mail.login(self.email, self.pw)
+            selected_info = self.mail.select_folder(self.folder, readonly = self.readonly)
+        except:
+            error = 'Unable to connect to email'
+            send_error()
         
     def email_search(self):
+        
+        #Initiate scrape bool value to pass onto main class to indicate attachments have been downloaded
         global scrape
+        global error
+        
         scrape = False
-        id = self.mail.search([self.search])
-        print(id)
-        if len(id) > 0:
-            scrape = True
-            
-            for uid, message_data in self.mail.fetch(id, 'RFC822').items():
-                email_message = email.message_from_bytes(message_data[b'RFC822'])
-                
-                if email_message.get_content_maintype() != 'multipart':
-                    print('No attachment found')
-                    return
-            
-                for part in email_message.walk():
+        
+        try:
+            #id holds numerical value locations of emails found
+            id = self.mail.search([self.search])
 
-                    if part.get_content_maintype() != 'multipart' and part.get('Content-Disposition') is not None:
-                        print('Saved!')
-                        open(self.directory + '/' + part.get_filename(), 'wb').write(part.get_payload(decode=True))
-                        directories.append((self.directory + '/' + part.get_filename()))
-                        senders.append(email_message.get('From'))
-         
-        else:
-            print('No new emails.')
             
-        print(directories)
+            #If emails have been found
+            if len(id) > 0:
+                scrape = True
+                
+                """
+                For each email found given search parameters, take the message details and analyze. If attachment is detected within the email,
+                then download to the given directory
+                """
+                
+                for uid, message_data in self.mail.fetch(id, 'RFC822').items():
+                    email_message = email.message_from_bytes(message_data[b'RFC822'])
+                    
+                    if email_message.get_content_maintype() != 'multipart':
+                        print('No attachment found')
+                        return
+                
+                    for part in email_message.walk():
+
+                        if part.get_content_maintype() != 'multipart' and part.get('Content-Disposition') is not None:
+                            open(self.directory + '/' + part.get_filename(), 'wb').write(part.get_payload(decode=True))
+                            directories.append((self.directory + '/' + part.get_filename()))
+                            senders.append(email_message.get('From'))
+                            print('Attachment saved!')
+            else:
+                print('No new emails.')
+        except:
+            error = 'Unable to scrape emails'
+            send_error()
+
         
 def sheet_connect():
+    """
+    Function connects to google API and spreadsheet using credentials via JSON file and gpsread module and creates a working set of sheets to read and write to
+    """
+    global error
     
-    from oauth2client.service_account import ServiceAccountCredentials
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('/home/pi/Desktop/Python/Bot/bot_cred.json', scope)
-    client = gspread.authorize(creds)
-    doc = client.open('Copy of Candidate Tracker')
-    global sheet_list
-    sheet_list = doc.worksheets() 
+    try:
+        from oauth2client.service_account import ServiceAccountCredentials
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_name('/home/pi/Desktop/Python/Bot/bot_cred.json', scope)
+        client = gspread.authorize(creds)
+        doc = client.open(doc_name)
+        
+        #Returns a list of sheets to work from within the spreadsheet file
+        global sheet_list
+        sheet_list = doc.worksheets()
+        
+    except:
+        error = 'Unable to connect to spreadsheet'
+        send_error()
+  
+  
+def send_error():
+    """
+    Function to retreive error variable and deliver email to master and provide error notification and information
+    """
+    
+    global error
+    pw = ''
+    sent_from = ''
+    to = ''
+    subject = 'Error'
+    body = error
+    msg = MIMEMultipart()
+    msg['To'] =''.join(to)
+    msg['From'] = sent_from
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'plain'))
+
+    context = ssl.create_default_context()
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
+        server.login(sent_from, pw)
+        server.sendmail(sent_from, to, msg.as_string())
+    print('Error detected: ', error + '.', 'Closing program.')
+    exit()
+    
+        
+def send_email(sender):
+    """
+    Function to notify sender via email that request has been recieved and spreadsheet updated
+    """
+    
+    password = ''
+    sent_from = ''
+    to = sender
+    subject = ('Request received. Tracker updated.') 
+    body = ' '
+    msg = MIMEMultipart()
+    msg['To'] =''.join(to)
+    msg['From'] = sent_from
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'plain'))
+
+    context = ssl.create_default_context()
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
+        server.login(sent_from, password)
+        server.sendmail(sent_from, to, msg.as_string())
+        
 
 class Main:
+    """
+    Class performs logic operations and parses, organizes, and writes required candidate information to indicated spreadsheet locations
+    
+    Attributes:
+    
+    error: global error value to pass to error message
+    employee_dict: dict that allows conversions between varying employee names and initialis
+    sheet_redirect: dict that redirects candidate position to respective sheet within the document when writing
+    
+    Methods:
+    
+    send_email(self): send email to notify that entry has been added
+    run(self): performs scraping operation, organizes the data into a writeable list, determines sheet to write to, then creates entry in spreadsheet.
+    exit(self): Delete file(s) on local memory and close the program
+    """
     
     employee_dict = {
         
-    'April': 'AA',
-    'April Anolin': 'AA',
-    'Gaby': 'GO',
-    'Gabriela Ong': 'GO',
-    'Gaby Ong': 'GO'
-    
+    'John Doe': 'JD',
+        
     }
     
     sheet_redirect = {
         
-        'oo': 'OO/SO/Accounting',
-        'so': 'OO/SO/Accounting',
-        'credit': 'OO/SO/Accounting',
-        'analyst': 'OO/SO/Accounting',
-        'reconciliation': 'OO/SO/Accounting',
-        'oo':'OO/SO/Accounting',
+        'oo': 'OO/SO',
+        'so': 'OO/SO',
+        'credit': 'OO/SO',
+        'analyst': 'OO/SO',
+        'reconciliation': 'OO/SO',
         'data entry': 'Data Entry',
-        'hr': 'HR',
+        'hr': 'HR/MISC',
         'recruiting': 'HR',
         'marketing' : 'HR',
         'it': 'IT',
@@ -108,116 +218,137 @@ class Main:
         'case manager': 'Case Coordinator',
         'case coordinator': 'Case Coordinator',
     }
-        
-    def send_email(self, sender):
-            
-        password = 'Dylandylan2'
-        sent_from = 'kellyservices.bot@gmail.com'
-        to = sender  
-        subject = ('Request received. Tracker updated.') 
-        body = ''
-        msg = MIMEMultipart()
-        msg['To'] =', '.join(to)
-        msg['From'] = sent_from
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain'))
 
-        context = ssl.create_default_context()
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
-            server.login(sent_from, password)
-            server.sendmail(sent_from, to, msg.as_string())
-            
-    def sheet_sorter(suitable_pos):
-        suitable_sheet = []
-        for sheet in sheet_list: 
-            if suitable_pos in sheet.title:
-                suitable_sheet.append(sheet.title)
     
     def run(self):
         
+        global error
+        #Check if attachments have been downlaoded
         if scrape is True:
-            print('Beginning scrape...')
+            print('Beginning scrape...\n')
             sheet_connect()
-            for attachment in directories:
-               
-               #Sort initial table of info
-                doc = Document(attachment)
-                table1 = doc.tables[0]
-                candidate = []
-                for i in range(6):
-                    entry = table1.cell(i,1).text.strip()
-                    candidate.append(entry)
-                
-                
-                int_comments = table1.cell(7,1).text.strip().split('\n')
-                int_comments = [entry.strip() for entry in int_comments]
-                print(int_comments)
-                print('-'*20)
-                
-                matches = []
-                for entry in int_comments:
+            
+            try:
+                #Deal with 1 attachment at a time
+                for attachment in directories:
+                   
+                   #Sort initial table of info
+                    doc = Document(attachment)
+                    table1 = doc.tables[0]
+                    candidate = []
+                    for i in range(6):
+                        entry = table1.cell(i,1).text.strip()
+                        candidate.append(entry)
                     
-                    suit_pos = re.search('(^SUITABLE POSITIONS: )(.*)', entry)
-                    locat = re.search('(^LOCATION: )(.*)', entry)
-                    avail = re.search('(^AVAILABILITY: )(.*)', entry)
-                    comm = re.search('(^COMMUNICATION: )(\d)(.\d)', entry)
+                    #Take notes section and create seperate entries in a list
+                    int_comments = table1.cell(7,1).text.strip().split('\n')
+                    int_comments = [entry.strip() for entry in int_comments]
                     
-                    if suit_pos:
-                        suitable_p = suit_pos.group(2)
-                        matches.append(suit_pos.group())
-                        candidate.append(suit_pos.group(2))
-                        
-                    elif locat:
-                        matches.append(locat.group())
-                        candidate.append(locat.group(2))
-                        
-                    elif avail:
-                        matches.append(avail.group())
-                        candidate.append(avail.group(2))
-        
-                    elif comm:
-                        matches.append(comm.group())
-                        candidate.append(comm.group(2))
-                        
-                for match in matches:
-                    int_comments.remove(match)
+            except:
+                error = 'Unable to extract candidate info'
+                send_error()
+                
+            print('Initial interview comments: \n', int_comments)
+            print('-'*20)
+            
+            matches = []
+            
+            #Use regex to locate entries with the below titles and add them to the list of candidate
+            #information as well as remove them the list of notes to avoid repitition
+            
+            for entry in int_comments:
+                
+                suit_pos = re.search('(^SUITABLE POSITIONS: )(.*)', entry)
+                locat = re.search('(^LOCATION: )(.*)', entry)
+                avail = re.search('(^AVAILABILITY: )(.*)', entry)
+                comm = re.search('(^COMMUNICATION: )(\d)', entry)
+                
+                if suit_pos:
+                    suitable_p = suit_pos.group(2).split(', ')
+                    matches.append(suit_pos.group())
+                    candidate.append(suit_pos.group(2))
+                    
+                elif locat:
+                    matches.append(locat.group())
+                    candidate.append(locat.group(2))
+                    
+                elif avail:
+                    matches.append(avail.group())
+                    candidate.append(avail.group(2))
+    
+                elif comm:
+                    matches.append(comm.group())
+                    candidate.append(comm.group(2))
+                    
+            for match in matches:
+                int_comments.remove(match)
 
-            #rework note formatting
-                int_comments.pop(0)
-                int_comments = [entry+',' for entry in int_comments]
-                int_comments = ' '.join(int_comments)
-                
-                candidate.append('CREDIT')
-                candidate.append(int_comments.strip())
-                                    
+        #reformat note formatting
+            int_comments.pop(0)
+            
+            int_comments = [entry+',' for entry in int_comments if entry != '']
+            int_comments = ' '.join(int_comments)
+            print('Candidate notes section: \n', int_comments)
+            print('-'*20)
+            
+            #Added blank entry for credit section
+            candidate.append(' ')
+            candidate.append(int_comments.strip())
+           
+            try:
                 #reorder entries for quick insertion
                 order = [4, 0, 1 , 2, 3, 7, 10, 6, 5, 8, 9, 11]
                 candidate = [candidate[i] for i in order]
                 candidate[0] = self.employee_dict[candidate[0]]
                 candidate.insert(0, time.strftime("%m/%d/%Y"))
-                print(candidate)
                 
-                for sheet in sheet_list:
-                    if self.sheet_redirect.get(suitable_p.lower()) == sheet.title:
-                        main_sheet = sheet
+            except:
+                error = 'Unable to reformat Candidate information list'
+                send_error()
+                
+            print('Candidate entry: \n', candidate)
+            print('-'*20)
+            print('Suitable positions: \n', suitable_p)
+            print('-'*20)
             
-                print('Writing to ' + main_sheet.title)
-                sheet_length = [entry for entry in main_sheet.col_values(1)]
-                main_sheet.insert_row(candidate, len(sheet_length)+1)
-                
-            self.exit()
+           #Match first entry of suitable position to respective spreadsheet by using lower() then translate with dict
+            count = 0
+            print('Checking sheet title matching...\n')
+            for sheet in sheet_list:
+                print(self.sheet_redirect[suitable_p[0].lower()], sheet.title)
+                if self.sheet_redirect[suitable_p[0].lower()] == sheet.title:
+                    main_sheet = sheet
+                    count += 1
+            if count == 0:
+                error = 'Could not match to sheet title'
+                send_error()
+    
+            sheet_length = [entry for entry in main_sheet.col_values(1)]
+            main_sheet.insert_row(candidate, len(sheet_length)+1)
+            print('\nEntry added to ', main_sheet)
+        
+        #Retrieve list of senders and use send_email function to deliver notifications
+        print('Sender list:')
+        print(senders,'\n')
+        for sender in senders:
+            send_email(sender)
+        print('-'*20)
+        self.exit()
         
     def exit(self):
         for dir in directories:
             os.remove(dir)
-            print('Files removed')
+            print('File removed, scrape complete.')
+        exit()
 
 print('Executing program...')
 bot = ParseBot()
 bot.email_search()
 run = Main()
 run.run()
-exit()
+
+
+
 
 
 
