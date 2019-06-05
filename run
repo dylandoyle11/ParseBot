@@ -12,6 +12,8 @@ import time
 from docx import Document
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from Main import Main
+from Parse import Parse
 
 directories = []
 senders = []
@@ -86,6 +88,12 @@ def send_email(sender):
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
         server.login(sent_from, password)
         server.sendmail(sent_from, to, msg.as_string())
+
+"""
+Initialize Parse class and Main class. Run email search method to search for emails, then run main code. If the 
+Parse class found any emails with indicated subject and attachments, Parse passes True to run() indicating it to run 
+its full length and analyze the attachments; otherwise, run exits without executing. 
+"""
 
 print('Executing program...')
 bot = ParseBot()
