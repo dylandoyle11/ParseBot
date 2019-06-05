@@ -23,7 +23,8 @@ error = ''
         
 def sheet_connect():
     """
-    Function connects to google API and spreadsheet using credentials via JSON file and gpsread module and creates a working set of sheets to read and write to
+    Function connects to google API and spreadsheet using credentials via JSON file and gpsread module and creates a 
+    working set of sheets to read and write to
     """
     global error
     
