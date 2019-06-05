@@ -1,4 +1,4 @@
-class Main:
+class Input:
     """
     Class performs logic operations and parses, organizes, and writes required candidate information to indicated spreadsheet locations
     
@@ -45,7 +45,7 @@ class Main:
     def run(self):
         
         global error
-        #Check if attachments have been downlaoded
+        #Check if attachments have been downloaded
         if scrape is True:
             print('Beginning scrape...\n')
             sheet_connect()
@@ -144,7 +144,8 @@ class Main:
             if count == 0:
                 error = 'Could not match to sheet title'
                 send_error()
-    
+            
+            #Determine index of last row and input new row below it
             sheet_length = [entry for entry in main_sheet.col_values(1)]
             main_sheet.insert_row(candidate, len(sheet_length)+1)
             print('\nEntry added to ', main_sheet)
