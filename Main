@@ -1,0 +1,164 @@
+class Main:
+    """
+    Class performs logic operations and parses, organizes, and writes required candidate information to indicated spreadsheet locations
+    
+    Attributes:
+    
+    error: global error value to pass to error message
+    employee_dict: dict that allows conversions between varying employee names and initialis
+    sheet_redirect: dict that redirects candidate position to respective sheet within the document when writing
+    
+    Methods:
+    
+    send_email(self): send email to notify that entry has been added
+    run(self): performs scraping operation, organizes the data into a writeable list, determines sheet to write to, then creates entry in spreadsheet.
+    exit(self): Delete file(s) on local memory and close the program
+    """
+    
+    employee_dict = {
+        
+    'John Doe': 'JD',
+        
+    }
+    
+    sheet_redirect = {
+        
+        'oo': 'OO/SO',
+        'so': 'OO/SO',
+        'credit': 'OO/SO',
+        'analyst': 'OO/SO',
+        'reconciliation': 'OO/SO',
+        'data entry': 'Data Entry',
+        'hr': 'HR/MISC',
+        'recruiting': 'HR',
+        'marketing' : 'HR',
+        'it': 'IT',
+        'access service rep': 'IT',
+        'admin ea': 'Admin EA',
+        'law clerk': 'Admin EA',
+        'csr': 'CSR',
+        'case manager': 'Case Coordinator',
+        'case coordinator': 'Case Coordinator',
+    }
+
+    
+    def run(self):
+        
+        global error
+        #Check if attachments have been downlaoded
+        if scrape is True:
+            print('Beginning scrape...\n')
+            sheet_connect()
+            
+            try:
+                #Deal with 1 attachment at a time
+                for attachment in directories:
+                   
+                   #Sort initial table of info
+                    doc = Document(attachment)
+                    table1 = doc.tables[0]
+                    candidate = []
+                    for i in range(6):
+                        entry = table1.cell(i,1).text.strip()
+                        candidate.append(entry)
+                    
+                    #Take notes section and create seperate entries in a list
+                    int_comments = table1.cell(7,1).text.strip().split('\n')
+                    int_comments = [entry.strip() for entry in int_comments]
+                    
+            except:
+                error = 'Unable to extract candidate info'
+                send_error()
+                
+            print('Initial interview comments: \n', int_comments)
+            print('-'*20)
+            
+            matches = []
+            
+            #Use regex to locate entries with the below titles and add them to the list of candidate
+            #information as well as remove them the list of notes to avoid repitition
+            
+            for entry in int_comments:
+                
+                suit_pos = re.search('(^SUITABLE POSITIONS: )(.*)', entry)
+                locat = re.search('(^LOCATION: )(.*)', entry)
+                avail = re.search('(^AVAILABILITY: )(.*)', entry)
+                comm = re.search('(^COMMUNICATION: )(\d)', entry)
+                
+                if suit_pos:
+                    suitable_p = suit_pos.group(2).split(', ')
+                    matches.append(suit_pos.group())
+                    candidate.append(suit_pos.group(2))
+                    
+                elif locat:
+                    matches.append(locat.group())
+                    candidate.append(locat.group(2))
+                    
+                elif avail:
+                    matches.append(avail.group())
+                    candidate.append(avail.group(2))
+    
+                elif comm:
+                    matches.append(comm.group())
+                    candidate.append(comm.group(2))
+                    
+            for match in matches:
+                int_comments.remove(match)
+
+        #reformat note formatting
+            int_comments.pop(0)
+            
+            int_comments = [entry+',' for entry in int_comments if entry != '']
+            int_comments = ' '.join(int_comments)
+            print('Candidate notes section: \n', int_comments)
+            print('-'*20)
+            
+            #Added blank entry for credit section
+            candidate.append(' ')
+            candidate.append(int_comments.strip())
+           
+            try:
+                #reorder entries for quick insertion
+                order = [4, 0, 1 , 2, 3, 7, 10, 6, 5, 8, 9, 11]
+                candidate = [candidate[i] for i in order]
+                candidate[0] = self.employee_dict[candidate[0]]
+                candidate.insert(0, time.strftime("%m/%d/%Y"))
+                
+            except:
+                error = 'Unable to reformat Candidate information list'
+                send_error()
+                
+            print('Candidate entry: \n', candidate)
+            print('-'*20)
+            print('Suitable positions: \n', suitable_p)
+            print('-'*20)
+            
+           #Match first entry of suitable position to respective spreadsheet by using lower() then translate with dict
+            count = 0
+            print('Checking sheet title matching...\n')
+            for sheet in sheet_list:
+                print(self.sheet_redirect[suitable_p[0].lower()], sheet.title)
+                if self.sheet_redirect[suitable_p[0].lower()] == sheet.title:
+                    main_sheet = sheet
+                    count += 1
+            if count == 0:
+                error = 'Could not match to sheet title'
+                send_error()
+    
+            sheet_length = [entry for entry in main_sheet.col_values(1)]
+            main_sheet.insert_row(candidate, len(sheet_length)+1)
+            print('\nEntry added to ', main_sheet)
+        
+        #Retrieve list of senders and use send_email function to deliver notifications
+        print('Sender list:')
+        print(senders,'\n')
+        for sender in senders:
+            send_email(sender)
+        print('-'*20)
+        self.exit()
+        
+    def exit(self):
+        for dir in directories:
+            os.remove(dir)
+            print('File removed, scrape complete.')
+        exit()
