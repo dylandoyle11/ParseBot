@@ -1,0 +1,86 @@
+class ParseBot:
+    """
+    Class that scans email inbox for unread email with subject 'input'. Bot will download
+    the attachment(s) and pass them to the main function to be analyzed
+    
+    Attributes
+    
+    error: global error value to pass to error message
+    self.search: email search parameters
+    self.email: bot email address
+    self.pw: password for bot login
+    self.folder: email folder to search
+    self.readonly: give bot the ability to read and write
+    self.host: IMAP host address
+    self.directory: local directory to download email attachments
+    self.__email_connect(): connect to email account upon initialization
+    
+    Methods:
+    
+    __email_connect(): connect to email server
+    email_search(): Function that performs email search and downloads attachment(s) if found
+    """
+    
+    def __init__(self):
+        
+        self.search = ['SUBJECT','testing']
+        self.email = ''
+        self.pw = ''
+        self.folder = 'INBOX'
+        self.readonly = False
+        self.host = 'imap.gmail.com'
+        self.directory = ''
+        self.__email_connect()
+                
+    def __email_connect(self):
+        
+        global error
+        try:
+            self.mail = imapclient.IMAPClient(self.host, ssl = True)
+            accountdetails = self.mail.login(self.email, self.pw)
+            selected_info = self.mail.select_folder(self.folder, readonly = self.readonly)
+        except:
+            error = 'Unable to connect to email'
+            send_error()
+        
+    def email_search(self):
+        
+        #Initiate scrape bool value to pass onto main class to indicate attachments have been downloaded
+        global scrape
+        global error
+        
+        scrape = False
+        
+        try:
+            #id holds numerical value locations of emails found
+            id = self.mail.search([self.search])
+
+            
+            #If emails have been found
+            if len(id) > 0:
+                scrape = True
+                
+                """
+                For each email found given search parameters, take the message details and analyze. If attachment is detected within the email,
+                then download to the given directory
+                """
+                
+                for uid, message_data in self.mail.fetch(id, 'RFC822').items():
+                    email_message = email.message_from_bytes(message_data[b'RFC822'])
+                    
+                    if email_message.get_content_maintype() != 'multipart':
+                        print('No attachment found')
+                        return
+                
+                    for part in email_message.walk():
+
+                        if part.get_content_maintype() != 'multipart' and part.get('Content-Disposition') is not None:
+                            open(self.directory + '/' + part.get_filename(), 'wb').write(part.get_payload(decode=True))
+                            directories.append((self.directory + '/' + part.get_filename()))
+                            senders.append(email_message.get('From'))
+                            print('Attachment saved!')
+            else:
+                print('No new emails.')
+        except:
+            error = 'Unable to scrape emails'
+            send_error()
