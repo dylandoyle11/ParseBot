@@ -12,7 +12,7 @@ import time
 from docx import Document
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from Main import Main
+from Input import Input
 from Parse import Parse
 
 directories = []
@@ -48,8 +48,7 @@ def send_error():
     """
     Function to retreive error variable and deliver email to master and provide error notification and information
     """
-    
-    global error
+  
     pw = ''
     sent_from = ''
     to = ''
